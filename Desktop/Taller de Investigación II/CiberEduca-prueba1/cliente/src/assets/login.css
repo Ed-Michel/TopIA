@@ -1,0 +1,84 @@
+#contenedorForm {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    background-color: #222a59;
+}
+
+#modulologin, #moduloregistro {
+    width: 100%;
+    max-width: 400px; /* Ajusta según sea necesario */
+    margin: 50px auto; /* Centra verticalmente y agrega margen en la parte superior e inferior */
+    padding: 50px; /* Ajusta según sea necesario */
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    border: 1px solid #ddd;
+    background-color: white;
+}
+
+.form-container {
+    background-color: #d3e2b6;
+    border-radius: 10px;
+    padding: 50px;
+    margin: 0 auto; /* Centra horizontalmente */
+    max-width: 600px;
+}
+
+#contenedorForm form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#contenedorForm form + p,
+#contenedorForm form p {
+    text-align: center;
+    color: black;
+}
+
+#contenedorForm input {
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    padding: 15px 30px;
+    font-size: large;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+#contenedorForm button {
+    background-color: #222a59;
+    color: white;
+    font-weight: bold;
+    font-size: large;
+    cursor: pointer;
+    padding: 10px;
+}
+
+#login-form {
+    width: 100%; /* Ocupa todo el ancho disponible */
+    margin-left: 22px;
+}
+
+.error {
+    color: rgb(255, 81, 81);
+}
+
+.escondido {
+    display: none;
+}
+
+.sr-only {
+    position: absolute;
+    left: -10000px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.grande {
+    font-size: 320%;
+}
