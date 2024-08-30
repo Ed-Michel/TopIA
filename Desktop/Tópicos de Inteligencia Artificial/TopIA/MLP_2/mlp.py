@@ -1,9 +1,6 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 import sklearn as sklearn
-from sklearn import datasets
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -15,8 +12,7 @@ from sklearn.preprocessing import StandardScaler
 
 from sklearn.pipeline import Pipeline
 
-from sklearn.metrics import mean_absolute_error,\
-    mean_absolute_percentage_error
+from sklearn.metrics import mean_absolute_percentage_error
     
 import os
 for dirname, _, filenames in os.walk('/kaggle/input'):
