@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import sklearn as sklearn
 from sklearn import datasets
+import matplotlib.pyplot as plt
+import numpy as np
 
 from sklearn.model_selection import train_test_split,\
     cross_validate, ShuffleSplit
@@ -63,9 +65,6 @@ mean_absolute_percentage_error(y_train, pipe.predict(X_train))
 
 # Porcentaje error datos de evaluación
 mean_absolute_percentage_error(y_test, pipe.predict(X_test))
-
-import matplotlib.pyplot as plt
-import numpy as np
 
 # Predicción
 y_pred = pipe.predict(X_test)
