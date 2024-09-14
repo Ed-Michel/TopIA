@@ -1,0 +1,152 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+import tensorflow as tf
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.utils import to_categorical
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv2D, MaxPool2D, Flatten, Dropout, BatchNormalization
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix
+
+# cargar el dataset
+(X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+print(f"X_train shape: {X_train.shape}")
+print(f"y_train shape: {y_train.shape}")
+print(f"X_test shape: {X_test.shape}")
+print(f"y_test shape: {y_test.shape}")
+
+# definir las etiquetas del dataset
+labels = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
+          'dog', 'frog', 'horse', 'ship', 'truck']
+
+# se muestran imágenes random del dataset y cómo vienen clasificadas con su etiqueta
+W_grid = 10
+L_grid = 10
+fig, axes = plt.subplots(L_grid, W_grid, figsize = (17,17))
+axes = axes.ravel() # se aplana una matriz 15 x 15 a un arreglo de 225 elementos
+n_train = len(X_train) # longitud de la sección del dataset de entrenamiento
+
+# se selecciona un número random de 0 a n_train (longitud del set de entrenamiento)
+for i in np.arange(0, W_grid * L_grid):
+
+    index = np.random.randint(0, n_train)   
+    axes[i].imshow(X_train[index,1:])
+    label_index = int(y_train[index])
+    axes[i].set_title(labels[label_index], fontsize = 8)
+    axes[i].axis('off')
+
+plt.subplots_adjust(hspace=0.4)
+
+# 50,000 elementos distribuidos en 10 clases
+classes_name = ['Airplane', 'Automobile', 'Bird', 'Cat', 'Deer', 'Dog', 'Frog', 'Horse', 'Ship', 'Truck']
+
+classes, counts = np.unique(y_train, return_counts=True)
+plt.barh(classes_name, counts)
+plt.title('Distribución de las clases en el set de Entrenamiento')
+
+# 10,000 elementos distribuidos en 10 clases
+classes, counts = np.unique(y_test, return_counts=True)
+plt.barh(classes_name, counts)
+plt.title('Distribución de las clases en el set de Evaluación')
+
+# PREPROCESAMIENTO DE LOS DATOS
+
+# escalado de los datos
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# transformar los sets de entrenamiento y evaluación en one-hot encoding (vectores con datos binarios)
+y_cat_train = to_categorical(y_train, 10)
+y_cat_test = to_categorical(y_test, 10)
+
+y_cat_train
+
+INPUT_SHAPE = (32, 32, 3)
+KERNEL_SIZE = (3, 3)
+model = Sequential()
+
+# capa Convolucional
+model.add(Conv2D(filters=32, kernel_size=KERNEL_SIZE, input_shape=INPUT_SHAPE, activation='relu', padding='same'))
+model.add(BatchNormalization())
+model.add(Conv2D(filters=32, kernel_size=KERNEL_SIZE, input_shape=INPUT_SHAPE, activation='relu', padding='same'))
+model.add(BatchNormalization())
+# capa Pooling
+model.add(MaxPool2D(pool_size=(2, 2)))
+# capa Dropout
+model.add(Dropout(0.25))
+
+model.add(Conv2D(filters=64, kernel_size=KERNEL_SIZE, input_shape=INPUT_SHAPE, activation='relu', padding='same'))
+model.add(BatchNormalization())
+model.add(Conv2D(filters=64, kernel_size=KERNEL_SIZE, input_shape=INPUT_SHAPE, activation='relu', padding='same'))
+model.add(BatchNormalization())
+model.add(MaxPool2D(pool_size=(2, 2)))
+model.add(Dropout(0.25))
+
+model.add(Conv2D(filters=128, kernel_size=KERNEL_SIZE, input_shape=INPUT_SHAPE, activation='relu', padding='same'))
+model.add(BatchNormalization())
+model.add(Conv2D(filters=128, kernel_size=KERNEL_SIZE, input_shape=INPUT_SHAPE, activation='relu', padding='same'))
+model.add(BatchNormalization())
+model.add(MaxPool2D(pool_size=(2, 2)))
+model.add(Dropout(0.25))
+
+model.add(Flatten())
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.25))
+model.add(Dense(10, activation='softmax'))
+
+METRICS = [
+    'accuracy',
+    tf.keras.metrics.Precision(name='precision'),
+    tf.keras.metrics.Recall(name='recall')
+]
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=METRICS)
+
+# todas las capas de la CNN a usar
+model.summary()
+
+# entrenamiento de la CNN
+batch_size = 32
+data_generator = ImageDataGenerator(width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+train_generator = data_generator.flow(X_train, y_cat_train, batch_size)
+steps_per_epoch = X_train.shape[0] // batch_size
+
+r = model.fit(train_generator, 
+              epochs=50,
+              steps_per_epoch=steps_per_epoch,
+              validation_data=(X_test, y_cat_test), 
+             )
+
+# graficar los resultados
+
+evaluation = model.evaluate(X_test, y_cat_test)
+print(f'Test Accuracy : {evaluation[1] * 100:.2f}%')
+
+y_pred = model.predict(X_test)
+y_pred = np.argmax(y_pred, axis=1)
+cm = confusion_matrix(y_test, y_pred)
+
+
+disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+                              display_labels=labels)
+
+fig, ax = plt.subplots(figsize=(10, 10))
+disp = disp.plot(xticks_rotation='vertical', ax=ax,cmap='summer')
+
+plt.show()
+
+# se pone a prueba el modelo
+my_image = X_test[102]
+plt.imshow(my_image)
+
+# rana
+print(f" Image 102 is {y_test[102]}")
+
+pred_102 = np.argmax(model.predict(my_image.reshape(1, 32, 32, 3)))
+print(f"The model predict that image 102 is {pred_102}")
