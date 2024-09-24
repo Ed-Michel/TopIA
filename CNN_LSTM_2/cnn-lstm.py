@@ -5,7 +5,6 @@ import torch.optim as optim
 import numpy as np
 from tslearn.datasets import UCR_UEA_datasets
 from tslearn.preprocessing import TimeSeriesScalerMinMax
-from typing import List
 import matplotlib.pyplot as plt
 
 dataset_name = 'ElectricDevices'
