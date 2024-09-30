@@ -1,140 +1,132 @@
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-import torch.optim as optim
+from keras.models import Sequential
+from keras.layers import Conv3D
+from keras.layers import ConvLSTM2D
+from keras.layers import BatchNormalization
 import numpy as np
-from tslearn.datasets import UCR_UEA_datasets
-from tslearn.preprocessing import TimeSeriesScalerMinMax
-import matplotlib.pyplot as plt
+import pylab as plt
 
-dataset_name = 'ElectricDevices'
+# Model
+seq = Sequential()
 
-# Load and preprocess the time series data
-X_train, y_train, X_test, y_test = UCR_UEA_datasets().load_dataset(dataset_name)
+seq.add(ConvLSTM2D(filters=40, kernel_size=(3, 3),
+                   input_shape=(None, 40, 40, 1),
+                   padding='same', return_sequences=True))
+seq.add(BatchNormalization())
 
-X_train.shape, y_train.shape, X_test.shape, y_test.shape
+seq.add(ConvLSTM2D(filters=40, kernel_size=(3, 3),
+                   padding='same', return_sequences=True))
+seq.add(BatchNormalization())
 
-# Normalize the data
-X_train = TimeSeriesScalerMinMax().fit_transform(X_train)
-X_test = TimeSeriesScalerMinMax().fit_transform(X_test)
+seq.add(ConvLSTM2D(filters=40, kernel_size=(3, 3),
+                   padding='same', return_sequences=True))
+seq.add(BatchNormalization())
 
-# Convert the data to torch tensors
-X_train = torch.from_numpy(X_train).float()
-X_test = torch.from_numpy(X_test).float()
-y_train = torch.from_numpy(y_train).long()
-y_test = torch.from_numpy(y_test).long()
+seq.add(ConvLSTM2D(filters=40, kernel_size=(3, 3),
+                   padding='same', return_sequences=True))
+seq.add(BatchNormalization())
 
-# Start class from 0
-y_train = y_train - 1
-y_test = y_test - 1
+seq.add(Conv3D(filters=1, kernel_size=(3, 3, 3),
+               activation='sigmoid',
+               padding='same', data_format='channels_last'))
+seq.compile(loss='binary_crossentropy', optimizer='adadelta')
 
-# Create DataLoader
-train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+seq.summary()
 
-test_dataset = torch.utils.data.TensorDataset(X_test, y_test)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+# Artificial data generation
+def generate_movies(n_samples=1200, n_frames=15):
+    row = 80
+    col = 80
+    noisy_movies = np.zeros((n_samples, n_frames, row, col, 1), dtype=float)
+    shifted_movies = np.zeros((n_samples, n_frames, row, col, 1),
+                              dtype=float)
 
-class CNN_LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
-        super(CNN_LSTM, self).__init__()
-        self.cnn = nn.Sequential(
-            nn.Conv1d(in_channels=input_size, out_channels=64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2),
-            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2)
-        )
-        self.lstm = nn.LSTM(input_size=128, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
+    for i in range(n_samples):
+        # Add 3 to 7 moving squares
+        n = np.random.randint(3, 8)
 
-    def forward(self, x):
-        # CNN takes input of shape (batch_size, channels, seq_len)
-        x = x.permute(0, 2, 1)
-        out = self.cnn(x)
-        # LSTM takes input of shape (batch_size, seq_len, input_size)
-        out = out.permute(0, 2, 1)
-        out, _ = self.lstm(out)
-        out = self.fc(out[:, -1, :])
-        return out
+        for j in range(n):
+            # Initial position
+            xstart = np.random.randint(20, 60)
+            ystart = np.random.randint(20, 60)
+            # Direction of motion
+            directionx = np.random.randint(0, 3) - 1
+            directiony = np.random.randint(0, 3) - 1
+
+            # Size of the square
+            w = np.random.randint(2, 4)
+
+            for t in range(n_frames):
+                x_shift = xstart + directionx * t
+                y_shift = ystart + directiony * t
+                noisy_movies[i, t, x_shift - w: x_shift + w,
+                             y_shift - w: y_shift + w, 0] += 1
+
+                # Make it more robust by adding noise.
+                # The idea is that if during inference,
+                # the value of the pixel is not exactly one,
+                # we need to train the network to be robust and still
+                # consider it as a pixel belonging to a square.
+                if np.random.randint(0, 2):
+                    noise_f = (-1)**np.random.randint(0, 2)
+                    noisy_movies[i, t,
+                                 x_shift - w - 1: x_shift + w + 1,
+                                 y_shift - w - 1: y_shift + w + 1,
+                                 0] += noise_f * 0.1
+
+                # Shift the ground truth by 1
+                x_shift = xstart + directionx * (t + 1)
+                y_shift = ystart + directiony * (t + 1)
+                shifted_movies[i, t, x_shift - w: x_shift + w,
+                               y_shift - w: y_shift + w, 0] += 1
+
+    # Cut to a 40x40 window
+    noisy_movies = noisy_movies[::, ::, 20:60, 20:60, ::]
+    shifted_movies = shifted_movies[::, ::, 20:60, 20:60, ::]
+    noisy_movies[noisy_movies >= 1] = 1
+    shifted_movies[shifted_movies >= 1] = 1
+    return noisy_movies, shifted_movies
+
+noisy_movies, shifted_movies = generate_movies(n_samples=1200)
+
+noisy_movies.shape, shifted_movies.shape
+
+# Train the network
+seq.fit(noisy_movies[:1000], shifted_movies[:1000], batch_size=10,
+        epochs=5, validation_split=0.05)
+
+# Testing the network on one movie
+which = 1004
+track = noisy_movies[which][:7, ::, ::, ::]
+
+track.shape, track[np.newaxis, ::, ::, ::, ::].shape
+
+for j in range(16):
+    new_pos = seq.predict(track[np.newaxis, ::, ::, ::, ::]) # (1, 7, 40, 40, 1)
+    new = new_pos[::, -1, ::, ::, ::] # (1, 40, 40, 1)
+    track = np.concatenate((track, new), axis=0) # adds +1 to the first dimension in each loop cycle
     
-input_size = X_train.shape[-1]
-hidden_size = 128
-num_layers = 2
-num_classes = len(np.unique(y_train))
+# Compare the predictions to the ground truth
+track2 = noisy_movies[which][::, ::, ::, ::]
 
-cnn_lstm = CNN_LSTM(input_size, hidden_size, num_layers, num_classes)
+for i in range(15):
+    fig = plt.figure(figsize=(10, 5))
 
-# Loss function and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(cnn_lstm.parameters(), lr=0.001)
+    ax = fig.add_subplot(121)
 
-# Training loop
-epochs = 200
-patience = 10
-best_loss = float('inf')
-patience_counter = 0
+    if i >= 7:
+        ax.text(1, 3, 'Predictions !', fontsize=20, color='w')
+    else:
+        ax.text(1, 3, 'Initial trajectory', fontsize=20)
 
-for epoch in range(epochs):
-    cnn_lstm.train()  # Set model to training mode
-    running_loss = 0.0
+    toplot = track[i, ::, ::, 0]
 
-    for batch_X, batch_y in train_loader:
-        optimizer.zero_grad()  # Clear gradients
-        outputs = cnn_lstm(batch_X)  # Forward pass
-        loss = criterion(outputs, batch_y)  # Calculate loss
-        loss.backward()  # Backward pass
-        optimizer.step()  # Update weights
-        running_loss += loss.item()
+    plt.imshow(toplot)
+    ax = fig.add_subplot(122)
+    plt.text(1, 3, 'Ground truth', fontsize=20)
 
-    avg_loss = running_loss / len(train_loader)
-    print(f'Epoch [{epoch + 1}/{epochs}], Loss: {avg_loss:.4f}')
+    toplot = track2[i, ::, ::, 0]
+    if i >= 2:
+        toplot = shifted_movies[which][i - 1, ::, ::, 0]
 
-    # Validation
-    cnn_lstm.eval()  # Set model to evaluation mode
-    val_loss = 0.0
-    with torch.no_grad():
-        for batch_X, batch_y in test_loader:
-            outputs = cnn_lstm(batch_X)
-            loss = criterion(outputs, batch_y)
-            val_loss += loss.item()
-
-    val_loss /= len(test_loader)
-    print(f'Validation Loss: {val_loss:.4f}')
-    
-# Obtaining the Accuracy and Validation Loss from our model
-cnn_lstm.eval()
-val_loss = 0.0
-correct = 0
-total = 0
-
-with torch.no_grad():
-    for batch_X, batch_y in test_loader:
-        outputs = cnn_lstm(batch_X)
-        loss = criterion(outputs, batch_y)
-        val_loss += loss.item()
-
-        
-        _, predicted = torch.max(outputs.data, 1)  
-        total += batch_y.size(0)  
-        correct += (predicted == batch_y).sum().item()  
-        
-val_loss /= len(test_loader)
-accuracy = correct / total 
-print(f'Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}')
-
-sizes = [correct, total - correct]
-labels = ['Correctos', 'Incorrectos']
-colors = ['#4CAF50', '#F44336']
-explode = (0.1, 0)
-
-# Creating a pie chart
-plt.figure(figsize=(8, 6))
-plt.pie(sizes, explode=explode, labels=labels, colors=colors,
-        autopct='%1.1f%%', shadow=True, startangle=230)
-plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-# Title
-plt.title('Precisión del Modelo')
-plt.show()
+    plt.imshow(toplot)
+    plt.savefig('%i_animate.png' % (i + 1))
