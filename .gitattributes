@@ -1,1 +1,4 @@
 *.npy,[[:space:]]*.png,[[:space:]]*.csv filter=lfs diff=lfs merge=lfs -text
+ConvLSTM/Models/*.npy filter=lfs diff=lfs merge=lfs -text
+ConvLSTM/DroughtDatasetMask/*.png filter=lfs diff=lfs merge=lfs -text
+ConvLSTM/DroughtDatasetMask/*.csv filter=lfs diff=lfs merge=lfs -text
