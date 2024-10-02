@@ -1,5 +1,5 @@
 import os
-import numpy as np
+
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
@@ -161,8 +161,8 @@ def main():
     h = 1
 
     #data = np.load("Models/PredictionsConvolutionLSTM_forecast_1.npy")
-    x_test = np.load("ConvLSTM\\Models\\x_test_convlstm_greys_forecast.npy") 
-    y_test = np.load("ConvLSTM\\Models\\y_test_convlstm_greys_forecast.npy")
+    x_test = np.load("Models/x_test_convlstm_greys_forecast.npy") 
+    y_test = np.load("Models/y_test_convlstm_greys_forecast.npy")
 
     #print(data.shape)
     print(x_test.shape)
@@ -283,7 +283,7 @@ def main():
         plt.axis('off')
         plt.title('Original_t+{}'.format(i))
         im = Image.fromarray(y_test[pos, i].reshape(rows, cols))
-        im.save("ConvLSTM/GeneratedImageComparation/Original_t+{}.png".format(i))
+        im.save("GeneratedImageComparation/Original_t+{}.png".format(i))
     """for i in range(h):
         fig.add_subplot(r, c, ac)
         ac += 1
@@ -291,7 +291,7 @@ def main():
         plt.axis('off')
         plt.title('Pronóstico_t+{}'.format(i))
         im = Image.fromarray(new_data[pos, i].reshape(rows, cols))
-        im.save("ConvLSTM/GeneratedImageComparation/Pronostico_t+{}.png".format(i))"""
+        im.save("GeneratedImageComparation/Pronostico_t+{}.png".format(i))"""
     for i in range(h):
         fig.add_subplot(r, c, ac)
         ac += 1
@@ -299,7 +299,7 @@ def main():
         plt.axis('off')
         plt.title('Naive_t+{}'.format(i))
         im = Image.fromarray(naive[pos, i].reshape(rows, cols))
-        im.save("ConvLSTM/GeneratedImageComparation/Naive_t+{}.png".format(i))
+        im.save("GeneratedImageComparation/Naive_t+{}.png".format(i))
 
     plt.show()
     """

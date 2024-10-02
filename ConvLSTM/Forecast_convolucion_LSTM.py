@@ -12,6 +12,7 @@ from keras import backend as K
 import gc
 import time
 from app.common.color_tools import *
+from app.data_treatment.load_imgs import *
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
@@ -27,11 +28,21 @@ class CustomCallback(Callback):
         plt.imshow(y_pred[0], cmap='gray')
         plt.show()
 
+# Función que carga y prepara los datos
+def load_and_prepare_all_data(rows= 122, cols= 360, channels= 1):
+    x = load_imgs("ConvLSTM\\DroughtDatasetMask", "ConvLSTM\\DroughtDatasetMask\\NamesDroughtDataset.csv", rows, cols)
+    x = x.astype('float32')
+    x = x.reshape(len(x), rows, cols, channels)
+    print('Data shape: {}'.format(x.shape))
+    return x
+
+# Sirve para generar los cubos de información x, además asignar el objetivo y
 def create_shifted_frames(data):
     x = data[:, 0 : data.shape[1] - 1, :, :]
     y = data[:, 1 : data.shape[1], :, :]
     return x, y
 
+# Sirve para generar los cubos de información x, además asigna el objetivo y
 def create_shifted_frames_2(data):
     x = data[:, 0 : data.shape[1] - 1, :, :]
     y = data[:, data.shape[1]-1, :, :]
@@ -73,34 +84,36 @@ def limit_memory():
     gc.collect()
 
 def main():
-    #Parámetros iniciales
+    # Parámetros iniciales
     window = 10
     channels = 1
     rows = 122
     cols = 360
     categorical = False
     categories = np.array([0, 35, 70, 119, 177, 220, 255]) #[0,51,102,153,204,255]
-    horizon = 4
+    # Manejar este valor en 1, para generar solo la siguiente imagen
+    horizon = 1
     name = 'Model_autoML_testing_{}'.format(int(time.time()))
 
+    # Imágenes en color, no es necesario utilizarla
     if categorical:
         x = np.load("Models/Data_full_select_color.npy") * 255
         x = x.astype(np.uint8)
-        #Obtención de la paleta de colores, se toma una imagen muestra
+        # Obtención de la paleta de colores, se toma una imagen muestra
         aux = x[1168]
         res = n_colors_img(aux, 6)
         colors = get_colors(res).reshape(6,1,3)
         print(len(colors))
-        #Se utiliza una función de cuantificación en las imágenes para que
+        # Se utiliza una función de cuantificación en las imágenes para que
         # todas las imágenes manejen una paleta de colores.
         aux_data = np.array([rgb_quantized(i, colors) for i in x])
         print(aux_data.shape)
-        #Se comprueban los colores obtenidos
+        # Se comprueban los colores obtenidos
         c1 = get_colors(aux_data[0])
         c2 = get_colors(aux_data[1167])
         print(c1)
         print(c2)
-        #Se transforma el dataset de colores a escala de grieses, cv2 para mejor calidad.
+        # Se transforma el dataset de colores a escala de grieses, cv2 para mejor calidad.
         x_greys = np.array([cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) for img in aux_data])
         #np.save('Models/Data_full_select_greys.npy', x_greys)
         colors_greys = get_colors(x_greys[1168])
@@ -117,7 +130,9 @@ def main():
         print(get_colors(ig2))
         x = x_greys.astype('float32') / 255
     else:
-        x = np.load("ConvLSTM\Models\DroughtDatasetMask.npy").astype(np.uint8)
+        x = load_and_prepare_all_data().astype(np.uint8)
+        #Cargar imágenes en memoria, y almacenar en una estructura numpy
+        #x = np.load("Models/DroughtDatasetMask.npy").astype(np.uint8)
         #x = np.load('Models/SPIDatasetMask.npy').astype(np.uint8) #/255
         print(get_colors(x[-1]))
         print(x[-1].max())
@@ -197,10 +212,9 @@ def main():
     print("Validation dataset shapes: {}, {}".format(x_validation.shape, y_validation.shape))
     print("Test dataset shapes: {}, {}".format(x_test.shape, y_test.shape))
 
-    np.save("ConvLSTM\\Models\\x_test_convlstm_greys_forecast.npy", x_test)
-    np.save("ConvLSTM\\Models\\y_test_convlstm_greys_forecast.npy", y_test)
+    np.save("ConvLSTM\Models\\x_test_convlstm_greys_forecast.npy", x_test)
+    np.save("ConvLSTM\Models\\y_test_convlstm_greys_forecast.npy", y_test)
     
-
     #Mostrar imágenes
     #fig, axes = plt.subplots(2, 3, figsize= (10,8))
 
@@ -294,6 +308,8 @@ def main():
         print("El error del modelo es: {}".format(err))
         preds = model.predict(x_test, batch_size= 2)
         print(preds.shape)
+        
+        #Esto es para pronósticar a un horizonte más largo
         x_test_new = add_last(x_test, preds[:])
         preds2 = model.predict(x_test_new, batch_size= 2)
         #print(preds2.shape)
@@ -303,6 +319,8 @@ def main():
         preds4 = model.predict(x_test_new, batch_size= 2)
         res_forecast = add_last(x_test_new, preds4[:])
         print("PREDSS",res_forecast.shape)
+
+
         if categorical:
             np.save("ConvLSTM\\Models\\PredictionsConvolutionLSTM_greys_forecast_1.npy", res_forecast)
         else:
