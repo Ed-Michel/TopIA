@@ -2,3 +2,6 @@
 ConvLSTM/Models/*.npy filter=lfs diff=lfs merge=lfs -text
 ConvLSTM/DroughtDatasetMask/*.png filter=lfs diff=lfs merge=lfs -text
 ConvLSTM/DroughtDatasetMask/*.csv filter=lfs diff=lfs merge=lfs -text
+*.zip !text !filter !merge !diff
+*.csv !text !filter !merge !diff
+*.npy !text !filter !merge !diff

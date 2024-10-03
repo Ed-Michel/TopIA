@@ -85,7 +85,7 @@ def limit_memory():
 
 def main():
     # Parámetros iniciales
-    window = 10
+    window = 4
     channels = 1
     rows = 122
     cols = 360
@@ -270,7 +270,7 @@ def main():
 
         #Define moifiable training hyperparameters
         epochs = 10
-        batch_size = 4
+        batch_size = 2
 
         #Model training
         model.fit(
