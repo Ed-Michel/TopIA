@@ -1,0 +1,4 @@
+# Ignorar archivos grandes
+.csv
+.npy
+.png
