@@ -1,3 +1,0 @@
-*.zip !text !filter !merge !diff
-*.csv !text !filter !merge !diff
-*.npy !text !filter !merge !diff
