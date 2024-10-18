@@ -6,8 +6,8 @@ from keras import layers
 
 import io
 import imageio
-from IPython.display import Image, display
-from ipywidgets import widgets, Layout, HBox
+from IPython.display import display
+from ipywidgets import widgets, HBox
 
 # Download and load the dataset.
 fpath = keras.utils.get_file(

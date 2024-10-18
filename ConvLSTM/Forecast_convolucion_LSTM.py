@@ -199,7 +199,7 @@ def main():
     x_train = x_train.reshape(len(x_train), window, rows, cols, channels)
     x_validation = x_validation.reshape(len(x_validation), window, rows, cols, channels)
     x_test = x_test.reshape(len(x_test), window, rows, cols, channels)
-
+    
     print("Forma de datos de entrenamiento: {}".format(x_train.shape))
     print("Forma de datos de validación: {}".format(x_validation.shape))
     print("Forma de datos de pruebas: {}".format(x_test.shape))
