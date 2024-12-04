@@ -16,6 +16,8 @@ from app.data_treatment.load_imgs import *
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
+from tensorflow.keras.layers import Conv2D, Lambda
+from random import random
 
 class CustomCallback(Callback):
     def __init__(self, model, x_test):
@@ -30,7 +32,7 @@ class CustomCallback(Callback):
 
 # Función que carga y prepara los datos
 def load_and_prepare_all_data(rows= 122, cols= 360, channels= 1):
-    x = load_imgs("ConvLSTM\\DroughtDatasetMask", "ConvLSTM\\DroughtDatasetMask\\NamesDroughtDataset.csv", rows, cols)
+    x = load_imgs("/kaggle/working/DroughtDatasetMask", "/kaggle/working/DroughtDatasetMask/NamesDroughtDataset.csv", rows, cols)
     x = x.astype('float32')
     x = x.reshape(len(x), rows, cols, channels)
     print('Data shape: {}'.format(x.shape))
@@ -83,9 +85,127 @@ def limit_memory():
     K.clear_session()
     gc.collect()
 
-def main():
+def binary_to_decimal(binary_number):
+    """
+    Convierte un número binario (lista de 0 y 1) a su valor decimal.
+    """
+    number = 0
+    for b in binary_number:
+        number = (2 * number) + int(b)
+    return number
+
+def cromosome_to_params(cromosome):
+    print(len(cromosome))
+    """
+    Decodifica un cromosoma en una configuración de hiperparámetros para un modelo de aprendizaje profundo.
+
+    Parámetros:
+        cromosome (list[int]): Lista binaria que representa los hiperparámetros codificados.
+
+    Retorna:
+        dict: Configuración de hiperparámetros.
+    """
+    # Constantes
+    KERNEL_SIZE = [(1, 1), (3, 3), (5, 5), (7, 7)]
+    FILTERS_OPTIONS = [8, 16, 24, 32, 40, 48, 56, 64]
+    LEARNING_RATE_OPTIONS = [
+        0.0001, 0.000215, 0.000464, 0.001, 0.00215, 
+        0.00464, 0.01, 0.0215, 0.0464, 0.1
+    ]
+    REDUCTION_RATE_OPTIONS = [0.1, 0.2, 0.3, 0.4, 0.5]
+    WINDOW_SIZE_OPTIONS = list(range(1, 11))  # Tamaño ventana de entrada (1-10)
+    BATCH_SIZE_OPTIONS = [1, 8, 16, 24, 32, 40, 48, 56, 64]
+    PATIENCE_OPTIONS = list(range(2, 11))  # 2 a 10
+    LOSS_FUNCTIONS = ["binary_crossentropy", "kullback_leibler_divergence"]
+    OPTIMIZERS = ["SGD", "Adam", "RMSprop", "Adagrad", "Adadelta", "Nadam", "Ftrl"]
+
+    # Índice dinámico
+    idx = 0
+
+    # Número de capas ConvLSTM
+    num_conv_layers = binary_to_decimal(cromosome[idx:idx + 3]) + 1  # Rango 1-6
+    idx += 3
+
+    # Configuración de capas ConvLSTM
+    conv_layers = []
+    for i in range(num_conv_layers):
+        # Número de filtros (3 bits)
+        filters = FILTERS_OPTIONS[binary_to_decimal(cromosome[idx:idx + 3])]
+        idx += 3
+
+        # Tamaño del kernel (2 bits)
+        kernel_size = KERNEL_SIZE[binary_to_decimal(cromosome[idx:idx + 2])]
+        idx += 2
+
+        # Capa de normalización (1 bit)
+        normalization = bool(binary_to_decimal(cromosome[idx:idx + 1]))
+        idx += 1
+
+        conv_layers.append({
+            "filters": filters,
+            "kernel_size": kernel_size,
+            "normalization": normalization
+        })
+
+    # Tamaño del kernel capa Conv2D
+    kernel_conv2d = KERNEL_SIZE[binary_to_decimal(cromosome[idx:idx + 2])]
+    idx += 2
+
+    # Tamaño de la ventana de entrada
+    window_size = WINDOW_SIZE_OPTIONS[binary_to_decimal(cromosome[idx:idx + 4])]
+    idx += 4
+
+    # Batch size
+    batch_size = BATCH_SIZE_OPTIONS[binary_to_decimal(cromosome[idx:idx + 4])]
+    idx += 4
+
+    # Learning rate
+    learning_rate = LEARNING_RATE_OPTIONS[binary_to_decimal(cromosome[idx:idx + 4])]
+    idx += 4
+
+    # Tasa de reducción de aprendizaje
+    reduction_rate = REDUCTION_RATE_OPTIONS[binary_to_decimal(cromosome[idx:idx + 3])]
+    idx += 3
+
+    # Paciencia para reducción de aprendizaje
+    patience_reduction = PATIENCE_OPTIONS[binary_to_decimal(cromosome[idx:idx + 4])]
+    idx += 4
+
+    # Paciencia para EarlyStopping
+    patience_early_stopping = PATIENCE_OPTIONS[binary_to_decimal(cromosome[idx:idx + 4])]
+    idx += 4
+
+    # Función de pérdida (1 bit)
+    loss_function = LOSS_FUNCTIONS[binary_to_decimal(cromosome[idx:idx + 1])]
+    idx += 1
+
+    # Optimizador
+    optimizer = OPTIMIZERS[binary_to_decimal(cromosome[idx:idx + 3])]
+    idx += 3
+
+    # Configuración final
+    model_config = {
+        "num_conv_layers": num_conv_layers,
+        "conv_layers": conv_layers,
+        "kernel_conv2d": kernel_conv2d,
+        "window_size": window_size,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "reduction_rate": reduction_rate,
+        "patience_reduction": patience_reduction,
+        "patience_early_stopping": patience_early_stopping,
+        "loss_function": loss_function,
+        "optimizer": optimizer,
+    }
+
+    return model_config
+
+def fitness_function(cromosome):
+    # Decodifica los hiperparámetros del cromosoma
+    params = cromosome_to_params(cromosome)
+    
     # Parámetros iniciales
-    window = 4
+    window = params["window_size"]
     channels = 1
     rows = 122
     cols = 360
@@ -150,8 +270,8 @@ def main():
         
         args = [(d, categories) for d in x]
 
-        num_cores = multiprocessing.cpu_count()
-        with ProcessPoolExecutor(max_workers=num_cores-4) as pool:
+        num_cores = max(1, multiprocessing.cpu_count() - 4)
+        with ProcessPoolExecutor(max_workers=num_cores) as pool:
             with tqdm(total = len(x)) as progress:
                 futures = []
 
@@ -212,8 +332,8 @@ def main():
     print("Validation dataset shapes: {}, {}".format(x_validation.shape, y_validation.shape))
     print("Test dataset shapes: {}, {}".format(x_test.shape, y_test.shape))
 
-    np.save("ConvLSTM\Models\\x_test_convlstm_greys_forecast.npy", x_test)
-    np.save("ConvLSTM\Models\\y_test_convlstm_greys_forecast.npy", y_test)
+    np.save("/kaggle/working/Models/x_test_convlstm_greys_forecast.npy", x_test)
+    np.save("/kaggle/working/Models/y_test_convlstm_greys_forecast.npy", y_test)
     
     #Mostrar imágenes
     #fig, axes = plt.subplots(2, 3, figsize= (10,8))
@@ -230,53 +350,53 @@ def main():
     #strategy = tf.distribute.MirroredStrategy()
     strategy = tf.distribute.OneDeviceStrategy(device='/GPU:0')
     with strategy.scope():
-        #Construction of Convolutional LSTM network
-        print(*x_train.shape[2:])
-        print(*x_train.shape[1:])
-        inp = keras.layers.Input(shape=(None, *x_train.shape[2:]))
+        
+        # Construcción del modelo dinámico basado en los parámetros decodificados
+        inp = keras.layers.Input(shape=(None, rows, cols, channels))
+        m = inp
 
-        #It will be constructed a 3 ConvLSTM2D layers with batch normalization,
-        #Followed by a Conv3D layer for the spatiotemporal outputs.
-
-        #m = keras.layers.ConvLSTM2D(8, (5,5), padding= "same", activation= "relu")(inp)
-        #m = keras.layers.BatchNormalization()(m)
-        #m = keras.layers.ConvLSTM2D(16, (5,5), padding= "same", return_sequences= True, activation= "relu")(m)
-        #m = keras.layers.BatchNormalization()(m)
-        #m = keras.layers.ConvLSTM2D(16, (3,3), padding= "same", activation= "relu")(m)
-        #m = keras.layers.Conv2D(channels, (3,3), activation= "sigmoid", padding= "same")(m)
-
-        m = keras.layers.ConvLSTM2D(16, (5,5), padding= "same", return_sequences= True, activation= "relu")(inp)
-        m = keras.layers.BatchNormalization()(m)
-        m = keras.layers.ConvLSTM2D(16, (5,5), padding= "same", return_sequences= True, activation= "relu")(m)
-        m = keras.layers.BatchNormalization()(m)
-        #m = keras.layers.ConvLSTM2D(12, (3,3), padding= "same", return_sequences= True, activation= "relu")(m)
-        m = keras.layers.ConvLSTM2D(16, (3,3), padding= "same", activation= "relu")(m)
-        #m = keras.layers.BatchNormalization()(m)
-        #m = keras.layers.ConvLSTM2D(16, (5,5), padding= "same", return_sequences= True, activation= "relu")(m)
-        #m = keras.layers.BatchNormalization()(m)
-        #m = keras.layers.ConvLSTM2D(16, (3,3), padding= "same", activation= "relu")(m)
-        m = keras.layers.Conv2D(channels, (3,3), activation= "sigmoid", padding= "same")(m)
+        for layer in params["conv_layers"]:
+            m = keras.layers.ConvLSTM2D(
+                filters=layer["filters"],
+                kernel_size=layer["kernel_size"],
+                padding="same",
+                return_sequences=True,
+                activation="relu"
+            )(m)
+            if layer["normalization"]:
+                m = keras.layers.BatchNormalization()(m)
+        
+        # Reducción del eje temporal
+        m = Lambda(lambda x: x[:, -1])(m)
+        
+        # Aplicar Conv2D a cada paso temporal
+        m = Conv2D(channels, kernel_size=params["kernel_conv2d"], activation="sigmoid", padding="same")(m)
 
         model = keras.models.Model(inp, m)
-        model.compile(loss= "binary_crossentropy", optimizer= "Adam")
+        
+        optimizer_name = params["optimizer"]
+        optimizer_class = getattr(tf.keras.optimizers, optimizer_name)
+        optimizer = optimizer_class(params["learning_rate"])
+        
+        model.compile(loss=params["loss_function"], optimizer=optimizer)
 
         print(model.summary())
 
         #Callbacks
-        early_stopping = keras.callbacks.EarlyStopping(monitor= "val_loss", patience= 6, restore_best_weights= True)
-        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor= "val_loss", patience= 4)
+        early_stopping = keras.callbacks.EarlyStopping(monitor= "val_loss", patience=params["patience_early_stopping"], restore_best_weights= True)
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor= "val_loss", patience=params["patience_reduction"])
 
         board = TensorBoard(log_dir='logs/{}'.format(name))
 
         #Define moifiable training hyperparameters
         epochs = 10
-        batch_size = 2
+        batch_size = params["batch_size"]
 
         #Model training
         model.fit(
             x_train, y_train,
-            batch_size= batch_size,
-            epochs= epochs,
+            batch_size = batch_size,
+            epochs = epochs,
             validation_data= (x_validation, y_validation),
             #callbacks= [early_stopping, reduce_lr, board, CustomCallback(model, x_test)]
             callbacks= [reduce_lr, early_stopping]
@@ -322,9 +442,75 @@ def main():
 
 
         if categorical:
-            np.save("ConvLSTM\\Models\\PredictionsConvolutionLSTM_greys_forecast_1.npy", res_forecast)
+            np.save("/kaggle/working/Models/PredictionsConvolutionLSTM_greys_forecast_1.npy", res_forecast)
         else:
-            np.save("ConvLSTM\\Models\\PredictionsConvolutionLSTM_forecast_1.npy", res_forecast)
+            np.save("/kaggle/working/Models/PredictionsConvolutionLSTM_forecast_1.npy", res_forecast)
+            
+        # Evaluamos el rendimiento del modelo en el conjunto de validación
+        val_accuracy = model.evaluate(x_validation, y_validation, verbose=0)
+        print("Precisión en el conjunto de validación: {:.2f}".format(val_accuracy))
+        
+        # Devolvemos la precisión en el conjunto de validación
+        return val_accuracy
 
-if __name__ == "__main__":
-    main()
+class Solution(object):
+    def __init__(self, value):
+        self.value = value
+        self.fitness = None
+
+    def calculate_fitness(self, fitness_function):
+        self.fitness = fitness_function(self.value)
+
+def generate_candidate(vector):
+    value = ""
+    for p in vector:
+        value += "1" if random() < p else "0"
+    return Solution(value)
+
+def generate_vector(size):
+    return [0.5] * size  # Empieza con probabilidades del 50%
+
+def compete(a, b):
+    if a.fitness > b.fitness:
+        return a, b
+    else:
+        return b, a
+
+def update_vector(vector, winner, loser, population_size):
+    for i in range(len(vector)):
+        if winner[i] != loser[i]:
+            if winner[i] == '1':
+                vector[i] += 1.0 / float(population_size)
+            else:
+                vector[i] -= 1.0 / float(population_size)
+
+def run(generations, size, population_size, fitness_function):
+    vector = generate_vector(size)
+    best = None
+    
+    for i in range(generations):
+        s1 = generate_candidate(vector)
+        s2 = generate_candidate(vector)
+
+        s1.calculate_fitness(fitness_function)
+        s2.calculate_fitness(fitness_function)
+
+        winner, loser = compete(s1, s2)
+
+        if best:
+            if winner.fitness > best.fitness:
+                best = winner
+        else:
+            best = winner 
+        
+        update_vector(vector, winner.value, loser.value, population_size)
+
+        print(f"Generation: {i + 1}, Best value: {best.value}, Best fitness: {float(best.fitness)}")
+        
+    return best.value  # Devolvemos el mejor cromosoma encontrado
+
+if __name__ == '__main__':
+    
+    # Generamos un cromosoma de tamaño 44
+    cromosoma_optimo = run(1000, 44, 10, fitness_function)
+    print("Cromosoma óptimo encontrado:", cromosoma_optimo)
